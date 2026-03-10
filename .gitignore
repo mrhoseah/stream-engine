@@ -1,0 +1,11 @@
+build/
+out/
+.vs/
+.vscode/
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+compile_commands.json

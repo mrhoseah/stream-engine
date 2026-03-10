@@ -1,0 +1,12 @@
+---
+BasedOnStyle: LLVM
+IndentWidth: 2
+TabWidth: 2
+ColumnLimit: 100
+AccessModifierOffset: -2
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: Inline
+BreakBeforeBraces: Attach
+PointerAlignment: Left
+ReflowComments: true
+SortIncludes: true

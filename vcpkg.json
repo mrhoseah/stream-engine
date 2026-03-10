@@ -1,0 +1,10 @@
+{
+  "name": "stream-engine",
+  "version": "1.0.0",
+  "description": "C++ streaming engine using Red5 Pro Core SDK",
+  "dependencies": [
+    "cpp-httplib",
+    "nlohmann-json"
+  ],
+  "builtin-baseline": null
+}

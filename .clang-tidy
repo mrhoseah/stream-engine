@@ -1,0 +1,14 @@
+---
+Checks: >
+  -bugprone-*,
+  -cert-*,
+  -clang-analyzer-*,
+  -concurrency-*,
+  -cppcoreguidelines-*,
+  -performance-*,
+  -portability-*,
+  -readability-*,
+  -modernize-*
+WarningsAsErrors: ''
+HeaderFilterRegex: ''
+FormatStyle: none
