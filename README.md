@@ -1,23 +1,32 @@
 # stream-engine
 
-C++ streaming engine built with **Red5 Pro Core SDK**, using CMake and optional vcpkg for dependency management.
+**Enterprise-grade C++ streaming service** built with **Red5 Pro Core SDK**, designed for sibling project integration (e.g. **recastly**).
+
+## Features
+
+- **StreamingService** – High-level API for publish/subscribe via Red5
+- **Config & callbacks** – Typed config, event callbacks (on_connected, on_error, etc.)
+- **Result/ErrorCode** – Explicit error handling
+- **recastly integration** – `add_subdirectory` or `find_package`
+
+See [RECASTLY_INTEGRATION.md](RECASTLY_INTEGRATION.md) for integration details.
 
 ## Project Structure
 
 ```
 stream-engine/
-├── CMakeLists.txt           # Root build config
-├── vcpkg.json               # vcpkg manifest (optional)
-├── .clang-format            # Code formatting
-├── .clang-tidy              # Static analysis
-├── libs/
-│   └── stream-engine/       # Core library
-│       ├── include/         # Public headers
-│       └── src/             # Implementation
-├── apps/
-│   └── stream-client/       # Example application
-└── tests/
-    └── unit/                # Unit tests
+├── CMakeLists.txt
+├── libs/stream-engine/      # Core library
+│   ├── include/stream-engine/
+│   │   ├── types.hpp        # ErrorCode, Result, ServiceStatus
+│   │   ├── config.hpp       # StreamingServiceConfig
+│   │   ├── callbacks.hpp    # Event callbacks
+│   │   ├── streaming_service.hpp  # Main API
+│   │   └── stream_engine.hpp      # Low-level engine
+│   └── src/
+├── apps/stream-client/      # Example app
+├── tests/unit/
+└── cmake/                   # Install config for find_package
 ```
 
 ## Prerequisites
@@ -74,3 +83,39 @@ ctest --test-dir build -C Release
 - **r5webrtc** – WebRTC signaling and connections
 
 See [Red5 Core SDK docs](https://www.red5.net/docs/red5-pro/development/sdks/red5-core-sdk/red5-core-sdk-overview/).
+
+## Recastly Integration
+
+Build with vcpkg to enable `stream-engine-server` (requires `cpp-httplib`, `nlohmann-json`):
+
+```powershell
+cmake -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" ..
+cmake --build . --config Release --target stream-engine-server
+```
+
+Run the server (default port 9090):
+
+```powershell
+./build/Release/stream-engine-server.exe [port]
+```
+
+Recastly config (add to `stream` section):
+
+```yaml
+stream:
+  stream_engine_service:
+    stream_engine_enabled: true
+    stream_engine_base_url: "http://localhost:9090"
+    stream_engine_timeout: 30
+```
+
+When enabled, Recastly delegates all streaming to stream-engine-server via `/api/v1/stream-engine`.
+
+### Enterprise-Grade Features
+
+- **Graceful shutdown** – SIGTERM/SIGINT drains sessions, then exits
+- **Health** – `/health`, `/health/live`, `/health/ready` (liveness vs readiness)
+- **Metrics** – `/metrics` (Prometheus format: `stream_engine_sessions_active`, `stream_engine_requests_total`)
+- **Config** – `PORT`, `MAX_SESSIONS`, `MAX_REQUEST_BODY_BYTES`, `LOG_LEVEL`, `SHUTDOWN_TIMEOUT_SEC`, `METRICS_ENABLED`, `GRACEFUL_SHUTDOWN`
+- **Validation** – stream_id format, max body size, max sessions (returns 503 when at capacity)
+- **Structured errors** – `{"ok":false,"error":{"code":"...","message":"..."},"request_id":"..."}`
