@@ -37,6 +37,8 @@ ServerConfig ServerConfig::from_env() {
   cfg.metrics_enabled = (std::strcmp(getenv_safe("METRICS_ENABLED", "1"), "0") != 0);
   cfg.graceful_shutdown =
       (std::strcmp(getenv_safe("GRACEFUL_SHUTDOWN", "1"), "0") != 0);
+  cfg.recastly_base_url = getenv_safe("RECASTLY_BASE_URL", "");
+  cfg.recastly_shared_secret = getenv_safe("RECASTLY_STREAM_ENGINE_SECRET", "");
   return cfg;
 }
 

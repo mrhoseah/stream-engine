@@ -15,7 +15,11 @@ struct ServerConfig {
   bool metrics_enabled = true;
   bool graceful_shutdown = true;
 
-  /// Load from environment: PORT, MAX_SESSIONS, LOG_LEVEL, etc.
+  // Recastly webhook integration (optional)
+  std::string recastly_base_url;   // e.g. http://localhost:8080/api/v1
+  std::string recastly_shared_secret;
+
+  /// Load from environment: PORT, MAX_SESSIONS, LOG_LEVEL, RECASTLY_BASE_URL, etc.
   static ServerConfig from_env();
 };
 

@@ -66,3 +66,14 @@ void run_stream() {
   service->shutdown();
 }
 ```
+
+## stream-engine-server → Recastly webhooks
+
+When sessions start or stop, stream-engine-server POSTs to Recastly's webhook so Recastly can update stream status. Set:
+
+| Env var | Description |
+|---------|-------------|
+| `RECASTLY_BASE_URL` | Recastly API base (e.g. `http://localhost:8080/api/v1`) |
+| `RECASTLY_STREAM_ENGINE_SECRET` | Must match `stream_engine_shared_secret` in Recastly config |
+
+If both are set, stream-engine sends `stream.started` on session create and `stream.ended` on session stop. If unset, webhooks are skipped.

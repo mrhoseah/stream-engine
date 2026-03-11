@@ -116,6 +116,6 @@ When enabled, Recastly delegates all streaming to stream-engine-server via `/api
 - **Graceful shutdown** – SIGTERM/SIGINT drains sessions, then exits
 - **Health** – `/health`, `/health/live`, `/health/ready` (liveness vs readiness)
 - **Metrics** – `/metrics` (Prometheus format: `stream_engine_sessions_active`, `stream_engine_requests_total`)
-- **Config** – `PORT`, `MAX_SESSIONS`, `MAX_REQUEST_BODY_BYTES`, `LOG_LEVEL`, `SHUTDOWN_TIMEOUT_SEC`, `METRICS_ENABLED`, `GRACEFUL_SHUTDOWN`
+- **Config** – `PORT`, `MAX_SESSIONS`, `MAX_REQUEST_BODY_BYTES`, `LOG_LEVEL`, `SHUTDOWN_TIMEOUT_SEC`, `METRICS_ENABLED`, `GRACEFUL_SHUTDOWN`, `RECASTLY_BASE_URL`, `RECASTLY_STREAM_ENGINE_SECRET`
 - **Validation** – stream_id format, max body size, max sessions (returns 503 when at capacity)
 - **Structured errors** – `{"ok":false,"error":{"code":"...","message":"..."},"request_id":"..."}`

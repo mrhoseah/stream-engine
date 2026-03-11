@@ -50,6 +50,66 @@ std::string get_path_param(const httplib::Request& req, const std::string& name)
   return it->second;
 }
 
+// Parse base URL (e.g. http://localhost:8080/api/v1) into host, port, path.
+bool parse_base_url(const std::string& url, std::string& host, int& port,
+                    std::string& path) {
+  if (url.empty()) return false;
+  size_t p = url.find("://");
+  if (p == std::string::npos) return false;
+  std::string rest = url.substr(p + 3);
+  size_t slash = rest.find('/');
+  std::string host_port = (slash != std::string::npos) ? rest.substr(0, slash) : rest;
+  path = (slash != std::string::npos && slash + 1 < rest.size())
+             ? "/" + rest.substr(slash + 1)
+             : "/api/v1";
+  while (!path.empty() && path.back() == '/') path.pop_back();
+  size_t colon = host_port.find(':');
+  if (colon != std::string::npos) {
+    host = host_port.substr(0, colon);
+    port = std::atoi(host_port.substr(colon + 1).c_str());
+    if (port <= 0 || port > 65535) port = 80;
+  } else {
+    host = host_port;
+    port = 80;
+  }
+  return !host.empty();
+}
+
+void send_recastly_webhook(const stream_engine::server::ServerConfig& cfg,
+                          const std::string& event, const std::string& stream_id,
+                          const std::string& stream_key, int duration_sec = 0) {
+  if (cfg.recastly_base_url.empty() || cfg.recastly_shared_secret.empty()) return;
+  std::string host;
+  int port = 80;
+  std::string base_path;
+  if (!parse_base_url(cfg.recastly_base_url, host, port, base_path)) return;
+  std::string path = base_path + "/stream-engine/webhook";
+  json body = {{"event", event}, {"stream_id", stream_id}};
+  if (!stream_key.empty()) body["stream_key"] = stream_key;
+  if (duration_sec > 0) body["duration_sec"] = duration_sec;
+  std::string body_str = body.dump();
+  try {
+    httplib::Client cli(host.c_str(), port);
+    cli.set_connection_timeout(5, 0);
+    cli.set_read_timeout(5, 0);
+    httplib::Headers headers = {{"X-Stream-Engine-Secret", cfg.recastly_shared_secret}};
+    auto res = cli.Post(path, headers, body_str, "application/json");
+    if (res && res->status >= 200 && res->status < 300) {
+      std::cout << "[stream-engine] Webhook " << event << " stream=" << stream_id
+                << " ok" << std::endl;
+    } else if (res) {
+      std::cerr << "[stream-engine] Webhook " << event << " stream=" << stream_id
+                << " failed status=" << res->status << std::endl;
+    } else {
+      std::cerr << "[stream-engine] Webhook " << event << " stream=" << stream_id
+                << " request failed" << std::endl;
+    }
+  } catch (const std::exception& e) {
+    std::cerr << "[stream-engine] Webhook " << event << " stream=" << stream_id
+              << " error: " << e.what() << std::endl;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // SessionManager – thread-safe, max sessions enforced
 // ---------------------------------------------------------------------------
@@ -159,6 +219,12 @@ class SessionManager {
   bool is_ready() const { return !shutting_down_.load(); }
   void set_shutting_down() { shutting_down_ = true; }
 
+  std::string get_stream_key(const std::string& stream_id) const {
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it = sessions_.find(stream_id);
+    return (it != sessions_.end()) ? it->second.stream_key : "";
+  }
+
  private:
   std::size_t max_sessions_;
   mutable std::mutex mu_;
@@ -249,6 +315,9 @@ int main(int argc, char* argv[]) {
       json body = json::parse(req.body);
       auto r = mgr.start(body);
       if (r.ok) {
+        send_recastly_webhook(config, "stream.started",
+                             body.value("stream_id", ""),
+                             body.value("stream_key", ""), 0);
         res.status = 200;
         res.set_content(R"({"ok":true})", "application/json");
       } else {
@@ -275,7 +344,7 @@ int main(int argc, char* argv[]) {
 
   // POST /api/v1/sessions/:id/stop
   svr.Post("/api/v1/sessions/:id/stop",
-           [&mgr](const httplib::Request& req, httplib::Response& res) {
+           [&mgr, &config](const httplib::Request& req, httplib::Response& res) {
              std::string id = get_path_param(req, "id");
              if (id.empty()) {
                res.status = 400;
@@ -286,6 +355,7 @@ int main(int argc, char* argv[]) {
                    "application/json");
                return;
              }
+             std::string key = mgr.get_stream_key(id);
              if (!mgr.stop(id)) {
                res.status = 404;
                res.set_content(
@@ -295,6 +365,7 @@ int main(int argc, char* argv[]) {
                    "application/json");
                return;
              }
+             send_recastly_webhook(config, "stream.ended", id, key, 0);
              res.status = 200;
              res.set_content(R"({"ok":true})", "application/json");
            });
