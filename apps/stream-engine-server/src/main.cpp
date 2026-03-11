@@ -8,6 +8,7 @@
 #include "server_config.hpp"
 #include "stream-engine/stream_engine.hpp"
 #include <atomic>
+#include <chrono>
 #include <csignal>
 #include <cstring>
 #include <httplib.h>
@@ -70,9 +71,48 @@ bool parse_base_url(const std::string& url, std::string& host, int& port,
     if (port <= 0 || port > 65535) port = 80;
   } else {
     host = host_port;
-    port = 80;
+    port = (url.substr(0, p) == "https") ? 443 : 80;
   }
   return !host.empty();
+}
+
+struct ValidateKeyResult {
+  bool valid = false;
+  std::string stream_id;
+  std::string message;
+};
+
+ValidateKeyResult validate_key_recastly(const stream_engine::server::ServerConfig& cfg,
+                                        const std::string& stream_key) {
+  if (cfg.recastly_base_url.empty() || cfg.recastly_shared_secret.empty()) {
+    return {true, "", ""};  // Recastly not configured, allow
+  }
+  std::string host;
+  int port = 80;
+  std::string base_path;
+  if (!parse_base_url(cfg.recastly_base_url, host, port, base_path)) {
+    return {true, "", ""};  // Parse failed, allow (degraded mode)
+  }
+  std::string path = base_path + "/stream-engine/validate-key";
+  json body = {{"stream_key", stream_key}};
+  std::string body_str = body.dump();
+  try {
+    httplib::Client cli(host.c_str(), port);
+    cli.set_connection_timeout(5, 0);
+    cli.set_read_timeout(5, 0);
+    httplib::Headers headers = {{"X-Stream-Engine-Secret", cfg.recastly_shared_secret}};
+    auto res = cli.Post(path, headers, body_str, "application/json");
+    if (!res) {
+      return {false, "", "recastly validation request failed"};
+    }
+    json j = json::parse(res->body);
+    bool valid = j.value("valid", false);
+    std::string stream_id = j.value("stream_id", "");
+    std::string message = j.value("message", "");
+    return {valid, stream_id, message};
+  } catch (const std::exception& e) {
+    return {false, "", std::string("recastly validation error: ") + e.what()};
+  }
 }
 
 void send_recastly_webhook(const stream_engine::server::ServerConfig& cfg,
@@ -120,6 +160,7 @@ struct Session {
   std::string title;
   stream_engine::StreamEngine engine;
   bool active{false};
+  std::chrono::steady_clock::time_point start_time{};
 };
 
 class SessionManager {
@@ -132,7 +173,7 @@ class SessionManager {
     std::string error_message;
   };
 
-  StartResult start(const json& cfg) {
+  StartResult start(const json& cfg, const stream_engine::server::ServerConfig& svc_cfg) {
     std::string stream_id = cfg.value("stream_id", "");
     std::string stream_key = cfg.value("stream_key", "");
     std::string title = cfg.value("title", "stream");
@@ -142,6 +183,14 @@ class SessionManager {
     }
     if (!is_valid_stream_id(stream_id)) {
       return {false, "INVALID_STREAM_ID", "stream_id must be alphanumeric, 1-128 chars"};
+    }
+
+    if (!stream_key.empty() && !svc_cfg.recastly_base_url.empty() &&
+        !svc_cfg.recastly_shared_secret.empty()) {
+      auto v = validate_key_recastly(svc_cfg, stream_key);
+      if (!v.valid) {
+        return {false, "INVALID_STREAM_KEY", v.message.empty() ? "invalid stream key" : v.message};
+      }
     }
 
     std::lock_guard<std::mutex> lock(mu_);
@@ -168,16 +217,29 @@ class SessionManager {
     }
 
     s.active = true;
+    s.start_time = std::chrono::steady_clock::now();
     return {true, "", ""};
   }
 
-  bool stop(const std::string& stream_id) {
-    std::lock_guard<std::mutex> lock(mu_);
-    auto it = sessions_.find(stream_id);
-    if (it == sessions_.end()) return false;
-    it->second.engine.stop();
-    it->second.active = false;
-    sessions_.erase(it);
+  bool stop(const std::string& stream_id,
+            const stream_engine::server::ServerConfig& svc_cfg) {
+    std::string key;
+    int duration_sec = 0;
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      auto it = sessions_.find(stream_id);
+      if (it == sessions_.end()) return false;
+      if (it->second.active) {
+        auto now = std::chrono::steady_clock::now();
+        duration_sec = static_cast<int>(
+            std::chrono::duration_cast<std::chrono::seconds>(now - it->second.start_time).count());
+      }
+      key = it->second.stream_key;
+      it->second.engine.stop();
+      it->second.active = false;
+      sessions_.erase(it);
+    }
+    send_recastly_webhook(svc_cfg, "stream.ended", stream_id, key, duration_sec);
     return true;
   }
 
@@ -313,7 +375,7 @@ int main(int argc, char* argv[]) {
         return;
       }
       json body = json::parse(req.body);
-      auto r = mgr.start(body);
+      auto r = mgr.start(body, config);
       if (r.ok) {
         send_recastly_webhook(config, "stream.started",
                              body.value("stream_id", ""),
@@ -355,8 +417,7 @@ int main(int argc, char* argv[]) {
                    "application/json");
                return;
              }
-             std::string key = mgr.get_stream_key(id);
-             if (!mgr.stop(id)) {
+             if (!mgr.stop(id, config)) {
                res.status = 404;
                res.set_content(
                    error_response("NOT_FOUND", "stream not found",
@@ -365,7 +426,6 @@ int main(int argc, char* argv[]) {
                    "application/json");
                return;
              }
-             send_recastly_webhook(config, "stream.ended", id, key, 0);
              res.status = 200;
              res.set_content(R"({"ok":true})", "application/json");
            });
