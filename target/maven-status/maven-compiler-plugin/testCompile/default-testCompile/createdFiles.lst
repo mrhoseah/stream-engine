@@ -1,0 +1,7 @@
+com\streaming\engine\session\SessionManagerConcurrencyTests$ParallelProbeRed5Service.class
+com\streaming\engine\StreamingEngineApplicationTests.class
+com\streaming\engine\session\SessionManagerConcurrencyTests$FailingStopRed5Service.class
+com\streaming\engine\session\SessionManagerConcurrencyTests$CountingRed5Service.class
+com\streaming\engine\api\SessionControllerTests.class
+com\streaming\engine\session\SessionManagerConcurrencyTests.class
+com\streaming\engine\api\InboundSecurityServiceTests.class

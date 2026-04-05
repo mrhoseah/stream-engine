@@ -1,0 +1,56 @@
+server:
+  port: ${STREAM_ENGINE_PORT:8085}
+  shutdown: ${SERVER_SHUTDOWN:immediate}
+  ssl:
+    enabled: ${STREAM_ENGINE_TLS_ENABLED:false}
+    key-store: ${STREAM_ENGINE_TLS_KEY_STORE:}
+    key-store-password: ${STREAM_ENGINE_TLS_KEY_STORE_PASSWORD:}
+    key-store-type: ${STREAM_ENGINE_TLS_KEY_STORE_TYPE:PKCS12}
+    key-alias: ${STREAM_ENGINE_TLS_KEY_ALIAS:}
+    client-auth: ${STREAM_ENGINE_TLS_CLIENT_AUTH:none}
+    trust-store: ${STREAM_ENGINE_TLS_TRUST_STORE:}
+    trust-store-password: ${STREAM_ENGINE_TLS_TRUST_STORE_PASSWORD:}
+    trust-store-type: ${STREAM_ENGINE_TLS_TRUST_STORE_TYPE:PKCS12}
+
+red5:
+  mode: ${RED5_MODE:http}
+  stub-enabled: ${RED5_STUB_ENABLED:false}
+  enforce-https: ${RED5_ENFORCE_HTTPS:true}
+  base-url: ${RED5_BASE_URL:}
+  start-path: ${RED5_START_PATH:/stream-engine/start}
+  stop-path: ${RED5_STOP_PATH:/stream-engine/stop}
+  secret-header: ${RED5_SECRET_HEADER:X-Stream-Engine-Secret}
+  shared-secret: ${RED5_SHARED_SECRET:}
+  connect-timeout-ms: ${RED5_CONNECT_TIMEOUT_MS:5000}
+  read-timeout-ms: ${RED5_READ_TIMEOUT_MS:5000}
+
+recastly:
+  enabled: ${RECASTLY_ENABLED:false}
+  enforce-https: ${RECASTLY_ENFORCE_HTTPS:true}
+  inbound-auth-required: ${RECASTLY_INBOUND_AUTH_REQUIRED:true}
+  inbound-signature-required: ${RECASTLY_INBOUND_SIGNATURE_REQUIRED:true}
+  inbound-timestamp-header: ${RECASTLY_INBOUND_TIMESTAMP_HEADER:X-Stream-Engine-Timestamp}
+  inbound-signature-header: ${RECASTLY_INBOUND_SIGNATURE_HEADER:X-Stream-Engine-Signature}
+  inbound-nonce-header: ${RECASTLY_INBOUND_NONCE_HEADER:X-Stream-Engine-Nonce}
+  inbound-body-hash-header: ${RECASTLY_INBOUND_BODY_HASH_HEADER:X-Stream-Engine-Body-SHA256}
+  inbound-max-skew-sec: ${RECASTLY_INBOUND_MAX_SKEW_SEC:300}
+  inbound-replay-window-sec: ${RECASTLY_INBOUND_REPLAY_WINDOW_SEC:600}
+  inbound-rate-limit-per-minute: ${RECASTLY_INBOUND_RATE_LIMIT_PER_MINUTE:120}
+  inbound-allowed-ips: ${RECASTLY_INBOUND_ALLOWED_IPS:}
+  base-url: ${RECASTLY_BASE_URL:}
+  shared-secret: ${RECASTLY_SHARED_SECRET:}
+  secret-header: ${RECASTLY_SECRET_HEADER:X-Stream-Engine-Secret}
+  validate-path: ${RECASTLY_VALIDATE_PATH:/stream-engine/validate-key}
+  webhook-path: ${RECASTLY_WEBHOOK_PATH:/stream-engine/webhook}
+  connect-timeout-ms: ${RECASTLY_CONNECT_TIMEOUT_MS:5000}
+  read-timeout-ms: ${RECASTLY_READ_TIMEOUT_MS:5000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,info}
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: ${SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE:5s}

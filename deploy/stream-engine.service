@@ -1,0 +1,24 @@
+[Unit]
+Description=Stream Engine Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=stream-engine
+Group=stream-engine
+WorkingDirectory=/opt/stream-engine
+EnvironmentFile=/etc/stream-engine/stream-engine.env
+ExecStart=/usr/bin/java -jar /opt/stream-engine/stream-engine.jar
+SuccessExitStatus=143
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/stream-engine
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
