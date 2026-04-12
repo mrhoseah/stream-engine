@@ -1,4 +1,4 @@
-c:\Users\hosea\dev\stream-engine\src\test\java\com\streaming\engine\api\InboundSecurityServiceTests.java
-c:\Users\hosea\dev\stream-engine\src\test\java\com\streaming\engine\api\SessionControllerTests.java
-c:\Users\hosea\dev\stream-engine\src\test\java\com\streaming\engine\session\SessionManagerConcurrencyTests.java
-c:\Users\hosea\dev\stream-engine\src\test\java\com\streaming\engine\StreamingEngineApplicationTests.java
+/home/mrhoseah/dev/stream-engine/src/test/java/com/streaming/engine/StreamingEngineApplicationTests.java
+/home/mrhoseah/dev/stream-engine/src/test/java/com/streaming/engine/api/InboundSecurityServiceTests.java
+/home/mrhoseah/dev/stream-engine/src/test/java/com/streaming/engine/api/SessionControllerTests.java
+/home/mrhoseah/dev/stream-engine/src/test/java/com/streaming/engine/session/SessionManagerConcurrencyTests.java

@@ -68,6 +68,65 @@ void run_stream() {
 ```
 
 ## stream-engine-server → Recastly webhooks
+## Using stream-engine as Recastly's streaming backend (Recommended)
+
+
+stream-engine now uses a dedicated AntMediaService for all streaming operations. Configure AMS integration in `src/main/resources/application.yml`:
+
+```yaml
+ams:
+  base-url: http://localhost:5080/LiveApp/rest/v2
+  start-path: /broadcasts/create
+  stop-path: /broadcasts/stop
+  # ...other options as needed
+```
+
+No Red5 configuration is required. All stream/session management is handled via AntMediaService and AMS REST API.
+
+To use stream-engine as a proxy for Ant Media Server, configure Recastly to send all stream/session management requests to stream-engine's REST API.
+
+### 1. Set the stream-engine endpoint in Recastly
+
+Set the following environment variable in Recastly:
+
+| Env var | Description |
+|---------|-------------|
+| `STREAM_ENGINE_BASE_URL` | URL of your stream-engine instance (e.g. `http://localhost:8085`) |
+
+### 2. Example API usage from Recastly
+
+To start a stream:
+
+```
+POST $STREAM_ENGINE_BASE_URL/api/v1/sessions
+Content-Type: application/json
+{
+  "streamId": "my-stream-id",
+  "title": "My Stream Title"
+}
+```
+
+To stop a stream:
+
+```
+POST $STREAM_ENGINE_BASE_URL/api/v1/sessions/my-stream-id/stop
+```
+
+To get stream status:
+
+```
+GET $STREAM_ENGINE_BASE_URL/api/v1/sessions/my-stream-id/status
+```
+
+### 3. Security
+
+stream-engine enforces authentication and signature checks for inbound requests from Recastly. Ensure your secrets and allowed IPs are configured in `application.yml` or via environment variables.
+
+### 4. Why use this architecture?
+
+- Centralizes business logic and security
+- Allows backend changes without affecting Recastly
+- Enables custom features, logging, and analytics
 
 When sessions start or stop, stream-engine-server POSTs to Recastly's webhook so Recastly can update stream status. Set:
 

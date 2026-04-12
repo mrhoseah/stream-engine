@@ -1,7 +1,0 @@
-add_executable(test_stream_engine unit/test_stream_engine.cpp)
-target_link_libraries(test_stream_engine PRIVATE stream-engine)
-add_test(NAME test_stream_engine COMMAND test_stream_engine)
-
-add_executable(test_streaming_service unit/test_streaming_service.cpp)
-target_link_libraries(test_streaming_service PRIVATE stream-engine)
-add_test(NAME test_streaming_service COMMAND test_streaming_service)

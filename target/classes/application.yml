@@ -1,3 +1,14 @@
+red5:
+  mode: http
+  stub-enabled: false
+  enforce-https: true
+  base-url: ""
+  start-path: /stream-engine/start
+  stop-path: /stream-engine/stop
+  secret-header: X-Stream-Engine-Secret
+  shared-secret: ""
+  connect-timeout-ms: 5000
+  read-timeout-ms: 5000
 server:
   port: ${STREAM_ENGINE_PORT:8085}
   shutdown: ${SERVER_SHUTDOWN:immediate}
@@ -12,17 +23,15 @@ server:
     trust-store-password: ${STREAM_ENGINE_TLS_TRUST_STORE_PASSWORD:}
     trust-store-type: ${STREAM_ENGINE_TLS_TRUST_STORE_TYPE:PKCS12}
 
-red5:
-  mode: ${RED5_MODE:http}
-  stub-enabled: ${RED5_STUB_ENABLED:false}
-  enforce-https: ${RED5_ENFORCE_HTTPS:true}
-  base-url: ${RED5_BASE_URL:}
-  start-path: ${RED5_START_PATH:/stream-engine/start}
-  stop-path: ${RED5_STOP_PATH:/stream-engine/stop}
-  secret-header: ${RED5_SECRET_HEADER:X-Stream-Engine-Secret}
-  shared-secret: ${RED5_SHARED_SECRET:}
-  connect-timeout-ms: ${RED5_CONNECT_TIMEOUT_MS:5000}
-  read-timeout-ms: ${RED5_READ_TIMEOUT_MS:5000}
+
+ams:
+  base-url: ${AMS_BASE_URL:http://localhost:5080/LiveApp/rest/v2}
+  start-path: ${AMS_START_PATH:/broadcasts/create}
+  stop-path: ${AMS_STOP_PATH:/broadcasts/stop}
+  secret-header: ${AMS_SECRET_HEADER:X-Stream-Engine-Secret}
+  shared-secret: ${AMS_SHARED_SECRET:}
+  connect-timeout-ms: ${AMS_CONNECT_TIMEOUT_MS:5000}
+  read-timeout-ms: ${AMS_READ_TIMEOUT_MS:5000}
 
 recastly:
   enabled: ${RECASTLY_ENABLED:false}

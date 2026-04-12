@@ -1,6 +1,6 @@
 package com.streaming.engine.session;
 
-import com.streaming.engine.red5.Red5Service;
+import com.streaming.engine.ams.AntMediaService;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.*;
@@ -10,8 +10,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SessionManagerConcurrencyTests {
 
-    private static SessionManager createManager(Red5Service red5) {
-        return new SessionManager(red5, new InMemorySessionRepository(), new LocalStreamMutex());
+    private static SessionManager createManager(AntMediaService ams) {
+        return new SessionManager(ams, new InMemorySessionRepository(), new LocalStreamMutex());
     }
 
     @Test
@@ -93,7 +93,7 @@ class SessionManagerConcurrencyTests {
         assertEquals(1, manager.list().size(), "session should still exist when upstream stop fails");
     }
 
-    private static class CountingRed5Service implements Red5Service {
+    private static class CountingRed5Service implements AntMediaService {
         private final long delayMs;
         private final AtomicInteger startCalls = new AtomicInteger();
 
@@ -114,7 +114,7 @@ class SessionManagerConcurrencyTests {
         }
     }
 
-    private static class ParallelProbeRed5Service implements Red5Service {
+    private static class ParallelProbeRed5Service implements AntMediaService {
         private final CountDownLatch entered = new CountDownLatch(2);
         private final CountDownLatch release = new CountDownLatch(1);
         private final AtomicInteger inFlight = new AtomicInteger();
@@ -144,7 +144,7 @@ class SessionManagerConcurrencyTests {
         }
     }
 
-    private static class FailingStopRed5Service implements Red5Service {
+    private static class FailingStopRed5Service implements AntMediaService {
         @Override
         public boolean startStream(String streamId, String title) {
             return true;

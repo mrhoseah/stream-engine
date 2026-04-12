@@ -1,6 +1,7 @@
 package com.streaming.engine.api;
 
 import com.streaming.engine.recastly.RecastlyClient;
+import com.streaming.engine.recastly.RecastlyWebhookPublisher;
 import com.streaming.engine.session.SessionManager;
 import com.streaming.engine.session.SessionState;
 import com.streaming.engine.session.StreamSession;
@@ -35,6 +36,12 @@ class SessionControllerTests {
 
     @MockBean
     private InboundSecurityService inboundSecurityService;
+
+    @MockBean
+    private RecastlyWebhookPublisher recastlyWebhookPublisher;
+
+    @MockBean
+    private com.streaming.engine.analytics.AnalyticsEventProducer analyticsEventProducer;
 
     @Test
     void startConflictReturns409() throws Exception {

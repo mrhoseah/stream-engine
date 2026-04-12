@@ -1,6 +1,6 @@
 package com.streaming.engine.session;
 
-import com.streaming.engine.red5.Red5Service;
+import com.streaming.engine.ams.AntMediaService;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -9,12 +9,12 @@ import java.util.List;
 @Service
 public class SessionManager {
 
-    private final Red5Service red5Service;
+    private final AntMediaService antMediaService;
     private final SessionRepository sessions;
     private final StreamMutex streamMutex;
 
-    public SessionManager(Red5Service red5Service, SessionRepository sessions, StreamMutex streamMutex) {
-        this.red5Service = red5Service;
+    public SessionManager(AntMediaService antMediaService, SessionRepository sessions, StreamMutex streamMutex) {
+        this.antMediaService = antMediaService;
         this.sessions = sessions;
         this.streamMutex = streamMutex;
     }
@@ -35,7 +35,7 @@ public class SessionManager {
             if (existing != null && existing.state() == SessionState.RUNNING) {
                 return StartResult.ALREADY_RUNNING;
             }
-            boolean started = red5Service.startStream(streamId, title);
+            boolean started = antMediaService.startStream(streamId, title);
             if (!started) {
                 return StartResult.RED5_FAILED;
             }
@@ -53,7 +53,7 @@ public class SessionManager {
             if (existing.state() != SessionState.RUNNING) {
                 return StopResult.of(StopStatus.NOT_RUNNING);
             }
-            boolean stopped = red5Service.stopStream(streamId);
+            boolean stopped = antMediaService.stopStream(streamId);
             if (!stopped) {
                 return StopResult.of(StopStatus.RED5_FAILED);
             }

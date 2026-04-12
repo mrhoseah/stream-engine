@@ -12,7 +12,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.Executor;
 
 @Configuration
-@EnableConfigurationProperties(StreamEngineProperties.class)
+@EnableConfigurationProperties({StreamEngineProperties.class, com.streaming.engine.red5.Red5Properties.class})
 public class EngineConfiguration {
 
     @Bean(destroyMethod = "close")

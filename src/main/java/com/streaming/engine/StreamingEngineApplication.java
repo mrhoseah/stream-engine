@@ -1,4 +1,6 @@
+
 package com.streaming.engine;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -13,6 +15,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
         }
 )
 @EnableAsync
+@ConfigurationPropertiesScan
 public class StreamingEngineApplication {
 
     public static void main(String[] args) {

@@ -28,18 +28,21 @@ public class SessionController {
     private final SessionManager sessionManager;
     private final RecastlyClient recastlyClient;
     private final RecastlyWebhookPublisher recastlyWebhookPublisher;
-    private final InboundSecurityService inboundSecurityService;
+        private final InboundSecurityService inboundSecurityService;
+        private final com.streaming.engine.analytics.AnalyticsEventProducer analyticsEventProducer;
 
     public SessionController(
             SessionManager sessionManager,
             RecastlyClient recastlyClient,
             RecastlyWebhookPublisher recastlyWebhookPublisher,
-            InboundSecurityService inboundSecurityService
-    ) {
-        this.sessionManager = sessionManager;
-        this.recastlyClient = recastlyClient;
-        this.recastlyWebhookPublisher = recastlyWebhookPublisher;
-        this.inboundSecurityService = inboundSecurityService;
+                        InboundSecurityService inboundSecurityService,
+                        com.streaming.engine.analytics.AnalyticsEventProducer analyticsEventProducer
+        ) {
+                this.sessionManager = sessionManager;
+                this.recastlyClient = recastlyClient;
+                this.recastlyWebhookPublisher = recastlyWebhookPublisher;
+                this.inboundSecurityService = inboundSecurityService;
+                this.analyticsEventProducer = analyticsEventProducer;
     }
 
     @GetMapping
@@ -100,6 +103,10 @@ public class SessionController {
         return switch (result) {
             case STARTED -> {
                 recastlyWebhookPublisher.publishStreamStarted(request.streamId(), streamKey);
+                // Emit analytics event to Kafka
+                String eventJson = String.format("{\"event\":\"stream.started\",\"streamId\":\"%s\",\"streamKey\":\"%s\",\"title\":\"%s\",\"timestamp\":%d}",
+                        request.streamId(), streamKey, request.title(), System.currentTimeMillis());
+                analyticsEventProducer.sendEvent(eventJson);
                 yield ResponseEntity.ok(Map.of("ok", true));
             }
             case ALREADY_RUNNING -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
@@ -126,6 +133,10 @@ public class SessionController {
         return switch (result.status()) {
             case STOPPED -> {
                 recastlyWebhookPublisher.publishStreamEnded(streamId, result.streamKey(), result.durationSec());
+                // Emit analytics event to Kafka
+                String eventJson = String.format("{\"event\":\"stream.ended\",\"streamId\":\"%s\",\"streamKey\":\"%s\",\"durationSec\":%d,\"timestamp\":%d}",
+                        streamId, result.streamKey(), result.durationSec(), System.currentTimeMillis());
+                analyticsEventProducer.sendEvent(eventJson);
                 yield ResponseEntity.ok(Map.of("ok", true));
             }
             case NOT_FOUND -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
