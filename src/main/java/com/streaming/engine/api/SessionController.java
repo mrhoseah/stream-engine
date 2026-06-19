@@ -1,11 +1,15 @@
 package com.streaming.engine.api;
 
+import com.streaming.engine.destination.DestinationRelay;
+import com.streaming.engine.destination.StreamDestination;
 import com.streaming.engine.session.SessionManager;
 import com.streaming.engine.session.SessionManager.StartResult;
 import com.streaming.engine.session.SessionManager.StopResult;
 import com.streaming.engine.session.SessionState;
 import com.streaming.engine.recastly.RecastlyClient;
 import com.streaming.engine.recastly.RecastlyWebhookPublisher;
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -28,21 +32,24 @@ public class SessionController {
     private final SessionManager sessionManager;
     private final RecastlyClient recastlyClient;
     private final RecastlyWebhookPublisher recastlyWebhookPublisher;
-        private final InboundSecurityService inboundSecurityService;
-        private final com.streaming.engine.analytics.AnalyticsEventProducer analyticsEventProducer;
+    private final InboundSecurityService inboundSecurityService;
+    private final com.streaming.engine.analytics.AnalyticsEventProducer analyticsEventProducer;
+    private final DestinationRelay destinationRelay;
 
     public SessionController(
             SessionManager sessionManager,
             RecastlyClient recastlyClient,
             RecastlyWebhookPublisher recastlyWebhookPublisher,
-                        InboundSecurityService inboundSecurityService,
-                        com.streaming.engine.analytics.AnalyticsEventProducer analyticsEventProducer
-        ) {
-                this.sessionManager = sessionManager;
-                this.recastlyClient = recastlyClient;
-                this.recastlyWebhookPublisher = recastlyWebhookPublisher;
-                this.inboundSecurityService = inboundSecurityService;
-                this.analyticsEventProducer = analyticsEventProducer;
+            InboundSecurityService inboundSecurityService,
+            com.streaming.engine.analytics.AnalyticsEventProducer analyticsEventProducer,
+            DestinationRelay destinationRelay
+    ) {
+        this.sessionManager = sessionManager;
+        this.recastlyClient = recastlyClient;
+        this.recastlyWebhookPublisher = recastlyWebhookPublisher;
+        this.inboundSecurityService = inboundSecurityService;
+        this.analyticsEventProducer = analyticsEventProducer;
+        this.destinationRelay = destinationRelay;
     }
 
     @GetMapping
@@ -99,13 +106,28 @@ public class SessionController {
             ));
         }
 
-        StartResult result = sessionManager.start(request.streamId(), streamKey, request.title());
+        List<StreamDestination> destinations = request.destinations() == null
+                ? List.of()
+                : request.destinations().stream()
+                        .map(d -> new StreamDestination(d.platform(), d.rtmpUrl(), d.streamKey(), d.active()))
+                        .toList();
+        StartResult result = sessionManager.start(
+                request.streamId(),
+                streamKey,
+                request.title(),
+                destinations
+        );
         return switch (result) {
             case STARTED -> {
                 recastlyWebhookPublisher.publishStreamStarted(request.streamId(), streamKey);
-                // Emit analytics event to Kafka
-                String eventJson = String.format("{\"event\":\"stream.started\",\"streamId\":\"%s\",\"streamKey\":\"%s\",\"title\":\"%s\",\"timestamp\":%d}",
-                        request.streamId(), streamKey, request.title(), System.currentTimeMillis());
+                String eventJson = String.format(
+                        "{\"event\":\"stream.started\",\"streamId\":\"%s\",\"streamKey\":\"%s\",\"title\":\"%s\",\"destinations\":%d,\"timestamp\":%d}",
+                        request.streamId(),
+                        streamKey,
+                        request.title(),
+                        destinations.size(),
+                        System.currentTimeMillis()
+                );
                 analyticsEventProducer.sendEvent(eventJson);
                 yield ResponseEntity.ok(Map.of("ok", true));
             }
@@ -113,9 +135,9 @@ public class SessionController {
                     "ok", false,
                     "error", "Session is already running"
             ));
-            case RED5_FAILED -> ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
+            case AMS_FAILED -> ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
                     "ok", false,
-                    "error", "Red5 start failed"
+                    "error", "AMS start failed"
             ));
         };
     }
@@ -147,24 +169,84 @@ public class SessionController {
                     "ok", false,
                     "error", "Session is not running"
             ));
-            case RED5_FAILED -> ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
+            case AMS_FAILED -> ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
                     "ok", false,
-                    "error", "Red5 stop failed"
+                    "error", "AMS stop failed"
             ));
         };
+    }
+
+    @GetMapping("/{streamId}/destinations")
+    public ResponseEntity<Map<String, Object>> destinations(
+            HttpServletRequest servletRequest,
+            @PathVariable String streamId
+    ) {
+        InboundSecurityService.AuthResult auth = inboundSecurityService.authorize(servletRequest);
+        if (!auth.allowed()) {
+            return ResponseEntity.status(auth.status()).body(Map.of("ok", false, "error", auth.error()));
+        }
+        List<com.streaming.engine.destination.RegisteredDestination> registered =
+                destinationRelay.listWithStatus(streamId);
+        long runningCount = registered.stream()
+                .filter(r -> r.pushStatus() == com.streaming.engine.destination.PushStatus.RUNNING)
+                .count();
+        return ResponseEntity.ok(Map.of(
+                "ok", true,
+                "streamId", streamId,
+                "destinations", registered,
+                "activeCount", registered.size(),
+                "runningCount", runningCount
+        ));
+    }
+
+    @PutMapping("/{streamId}/destinations")
+    public ResponseEntity<Map<String, Object>> syncDestinations(
+            HttpServletRequest servletRequest,
+            @PathVariable String streamId,
+            @RequestBody(required = false) SyncDestinationsRequest request
+    ) {
+        InboundSecurityService.AuthResult auth = inboundSecurityService.authorize(servletRequest);
+        if (!auth.allowed()) {
+            return ResponseEntity.status(auth.status()).body(Map.of("ok", false, "error", auth.error()));
+        }
+        List<StreamDestination> destinations = request == null || request.destinations() == null
+                ? List.of()
+                : request.destinations().stream()
+                        .map(d -> new StreamDestination(d.platform(), d.rtmpUrl(), d.streamKey(), d.active()))
+                        .toList();
+        destinationRelay.activate(streamId, destinations);
+        return ResponseEntity.ok(Map.of(
+                "ok", true,
+                "streamId", streamId,
+                "activeCount", destinations.size()
+        ));
+    }
+
+    public record SyncDestinationsRequest(List<DestinationRequest> destinations) {
+    }
+
+    public record DestinationRequest(
+            String platform,
+            @JsonProperty("rtmp_url") @JsonAlias("rtmpUrl") String rtmpUrl,
+            @JsonProperty("stream_key") @JsonAlias("streamKey") String streamKey,
+            boolean active
+    ) {
     }
 
     public record StartSessionRequest(
             @NotBlank
             @Size(max = 128)
             @Pattern(regexp = "^[A-Za-z0-9._:-]+$")
+            @JsonProperty("stream_id") @JsonAlias("streamId")
             String streamId,
             @NotBlank
             @Size(max = 200)
             String title,
             @Size(max = 256)
             @Pattern(regexp = "^[A-Za-z0-9._:-]*$")
-            String streamKey
+            @JsonProperty("stream_key") @JsonAlias("streamKey")
+            String streamKey,
+            List<DestinationRequest> destinations
     ) {
     }
 

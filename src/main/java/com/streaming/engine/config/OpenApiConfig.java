@@ -13,7 +13,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Stream Engine API")
-                        .description("Session lifecycle API for Red5 integration. Secured inbound calls require secret and signature headers.")
+                        .description("Session lifecycle API for Ant Media Server integration. Secured inbound calls require secret and signature headers.")
                         .version("v1"));
     }
 }

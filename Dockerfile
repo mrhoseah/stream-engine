@@ -1,11 +1,21 @@
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:21-jdk AS build
+
+WORKDIR /workspace
+
+COPY mvnw pom.xml ./
+COPY .mvn .mvn
+RUN chmod +x mvnw && ./mvnw -B -DskipTests dependency:go-offline
+
+COPY src src
+RUN ./mvnw -B -DskipTests package
+
+FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 
-COPY target/streaming-engine-0.1.0-SNAPSHOT.jar app.jar
+COPY --from=build /workspace/target/streaming-engine-0.1.0-SNAPSHOT.jar app.jar
 
-ENV JAVA_OPTS=""
-
+ENV JAVA_TOOL_OPTIONS=""
 EXPOSE 8085
-
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+ENTRYPOINT ["java"]
+CMD ["-jar", "app.jar"]

@@ -85,14 +85,14 @@ To use Ant Media Server securely and flexibly with Recastly, route all stream/se
 In `src/main/resources/application.yml` (or via environment variables):
 
 ```yaml
-red5:
+ams:
   base-url: http://localhost:5080/LiveApp/rest/v2
   start-path: /broadcasts/create
   stop-path: /broadcasts/stop
-  # Adjust other settings as needed
+  stub-enabled: false
 ```
 
-This ensures stream-engine's SessionManager and Red5Service interact with AMS REST API endpoints for stream management.
+Session management is handled via `AntMediaService` and the AMS REST API.
 
 ### b. Expose stream-engine API to Recastly
 

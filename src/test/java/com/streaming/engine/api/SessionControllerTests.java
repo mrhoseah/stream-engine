@@ -43,12 +43,15 @@ class SessionControllerTests {
     @MockBean
     private com.streaming.engine.analytics.AnalyticsEventProducer analyticsEventProducer;
 
+    @MockBean
+    private com.streaming.engine.destination.DestinationRelay destinationRelay;
+
     @Test
     void startConflictReturns409() throws Exception {
         when(inboundSecurityService.authorize(any()))
                 .thenReturn(new InboundSecurityService.AuthResult(true, org.springframework.http.HttpStatus.OK, ""));
         when(recastlyClient.validateKey("stream-1")).thenReturn(new RecastlyClient.ValidationResult(true, ""));
-        when(sessionManager.start("stream-1", "stream-1", "Title"))
+        when(sessionManager.start(org.mockito.ArgumentMatchers.eq("stream-1"), org.mockito.ArgumentMatchers.eq("stream-1"), org.mockito.ArgumentMatchers.eq("Title"), org.mockito.ArgumentMatchers.anyList()))
                 .thenReturn(SessionManager.StartResult.ALREADY_RUNNING);
 
         mockMvc.perform(post("/api/v1/sessions")
@@ -60,12 +63,12 @@ class SessionControllerTests {
     }
 
     @Test
-    void startRed5FailureReturns502() throws Exception {
+    void startAmsFailureReturns502() throws Exception {
         when(inboundSecurityService.authorize(any()))
                 .thenReturn(new InboundSecurityService.AuthResult(true, org.springframework.http.HttpStatus.OK, ""));
         when(recastlyClient.validateKey("stream-1")).thenReturn(new RecastlyClient.ValidationResult(true, ""));
-        when(sessionManager.start("stream-1", "stream-1", "Title"))
-                .thenReturn(SessionManager.StartResult.RED5_FAILED);
+        when(sessionManager.start(org.mockito.ArgumentMatchers.eq("stream-1"), org.mockito.ArgumentMatchers.eq("stream-1"), org.mockito.ArgumentMatchers.eq("Title"), org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn(SessionManager.StartResult.AMS_FAILED);
 
         mockMvc.perform(post("/api/v1/sessions")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -87,11 +90,11 @@ class SessionControllerTests {
     }
 
     @Test
-    void stopRed5FailureReturns502() throws Exception {
+    void stopAmsFailureReturns502() throws Exception {
         when(inboundSecurityService.authorize(any()))
                 .thenReturn(new InboundSecurityService.AuthResult(true, org.springframework.http.HttpStatus.OK, ""));
         when(sessionManager.stop("stream-2"))
-                .thenReturn(SessionManager.StopResult.of(SessionManager.StopStatus.RED5_FAILED));
+                .thenReturn(SessionManager.StopResult.of(SessionManager.StopStatus.AMS_FAILED));
 
         mockMvc.perform(post("/api/v1/sessions/stream-2/stop"))
                 .andExpect(status().isBadGateway());

@@ -1,6 +1,9 @@
 package com.streaming.engine.session;
 
 import com.streaming.engine.ams.AntMediaService;
+import com.streaming.engine.destination.DestinationRelay;
+import com.streaming.engine.destination.RtmpPushManager;
+import com.streaming.engine.destination.RtmpRelayProperties;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.*;
@@ -11,13 +14,18 @@ import static org.junit.jupiter.api.Assertions.*;
 class SessionManagerConcurrencyTests {
 
     private static SessionManager createManager(AntMediaService ams) {
-        return new SessionManager(ams, new InMemorySessionRepository(), new LocalStreamMutex());
+        RtmpRelayProperties props = new RtmpRelayProperties();
+        props.setEnabled(false);
+        DestinationRelay destinationRelay = new DestinationRelay(new RtmpPushManager(props, command -> {
+            throw new AssertionError("ffmpeg should not start in concurrency tests");
+        }));
+        return new SessionManager(ams, new InMemorySessionRepository(), new LocalStreamMutex(), destinationRelay);
     }
 
     @Test
     void concurrentStartSameStream_allowsOnlyOneStart() throws Exception {
-        CountingRed5Service red5 = new CountingRed5Service(150);
-        SessionManager manager = createManager(red5);
+        CountingAntMediaService ams = new CountingAntMediaService(150);
+        SessionManager manager = createManager(ams);
 
         ExecutorService pool = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
@@ -41,13 +49,13 @@ class SessionManagerConcurrencyTests {
 
         int successCount = (r1 ? 1 : 0) + (r2 ? 1 : 0);
         assertEquals(1, successCount, "exactly one concurrent start should succeed");
-        assertEquals(1, red5.startCalls.get(), "Red5 start should be called only once");
+        assertEquals(1, ams.startCalls.get(), "AMS start should be called only once");
     }
 
     @Test
     void concurrentStartDifferentStreams_runsInParallel() throws Exception {
-        ParallelProbeRed5Service red5 = new ParallelProbeRed5Service();
-        SessionManager manager = createManager(red5);
+        ParallelProbeAntMediaService ams = new ParallelProbeAntMediaService();
+        SessionManager manager = createManager(ams);
 
         ExecutorService pool = Executors.newFixedThreadPool(2);
 
@@ -55,23 +63,23 @@ class SessionManagerConcurrencyTests {
         Future<Boolean> f2 = pool.submit(() -> manager.start("stream-b", "key-b", "B") == SessionManager.StartResult.STARTED);
 
         assertTrue(
-                red5.entered.await(1, TimeUnit.SECONDS),
-                "different stream starts should enter Red5 concurrently"
+                ams.entered.await(1, TimeUnit.SECONDS),
+                "different stream starts should enter AMS concurrently"
         );
 
-        red5.release.countDown();
+        ams.release.countDown();
 
         assertTrue(f1.get(2, TimeUnit.SECONDS));
         assertTrue(f2.get(2, TimeUnit.SECONDS));
         pool.shutdownNow();
 
-        assertTrue(red5.maxConcurrent.get() >= 2, "expected concurrent Red5 calls for different streams");
+        assertTrue(ams.maxConcurrent.get() >= 2, "expected concurrent AMS calls for different streams");
     }
 
     @Test
     void stopRemovesSession_allowingCleanRestart() {
-        CountingRed5Service red5 = new CountingRed5Service(0);
-        SessionManager manager = createManager(red5);
+        CountingAntMediaService ams = new CountingAntMediaService(0);
+        SessionManager manager = createManager(ams);
 
         assertEquals(SessionManager.StartResult.STARTED, manager.start("stream-1", "key-1", "title"));
         assertEquals(SessionManager.StopStatus.STOPPED, manager.stop("stream-1").status());
@@ -80,24 +88,24 @@ class SessionManagerConcurrencyTests {
 
     @Test
     void stopMissingSession_returnsNotFound() {
-        SessionManager manager = createManager(new CountingRed5Service(0));
+        SessionManager manager = createManager(new CountingAntMediaService(0));
         assertEquals(SessionManager.StopStatus.NOT_FOUND, manager.stop("missing").status());
     }
 
     @Test
     void stopFailurePreservesRunningState() {
-        SessionManager manager = createManager(new FailingStopRed5Service());
+        SessionManager manager = createManager(new FailingStopAntMediaService());
 
         assertEquals(SessionManager.StartResult.STARTED, manager.start("stream-x", "key-x", "title"));
-        assertEquals(SessionManager.StopStatus.RED5_FAILED, manager.stop("stream-x").status());
+        assertEquals(SessionManager.StopStatus.AMS_FAILED, manager.stop("stream-x").status());
         assertEquals(1, manager.list().size(), "session should still exist when upstream stop fails");
     }
 
-    private static class CountingRed5Service implements AntMediaService {
+    private static class CountingAntMediaService implements AntMediaService {
         private final long delayMs;
         private final AtomicInteger startCalls = new AtomicInteger();
 
-        private CountingRed5Service(long delayMs) {
+        private CountingAntMediaService(long delayMs) {
             this.delayMs = delayMs;
         }
 
@@ -114,7 +122,7 @@ class SessionManagerConcurrencyTests {
         }
     }
 
-    private static class ParallelProbeRed5Service implements AntMediaService {
+    private static class ParallelProbeAntMediaService implements AntMediaService {
         private final CountDownLatch entered = new CountDownLatch(2);
         private final CountDownLatch release = new CountDownLatch(1);
         private final AtomicInteger inFlight = new AtomicInteger();
@@ -144,7 +152,7 @@ class SessionManagerConcurrencyTests {
         }
     }
 
-    private static class FailingStopRed5Service implements AntMediaService {
+    private static class FailingStopAntMediaService implements AntMediaService {
         @Override
         public boolean startStream(String streamId, String title) {
             return true;

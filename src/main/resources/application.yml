@@ -1,14 +1,3 @@
-red5:
-  mode: http
-  stub-enabled: false
-  enforce-https: true
-  base-url: ""
-  start-path: /stream-engine/start
-  stop-path: /stream-engine/stop
-  secret-header: X-Stream-Engine-Secret
-  shared-secret: ""
-  connect-timeout-ms: 5000
-  read-timeout-ms: 5000
 server:
   port: ${STREAM_ENGINE_PORT:8085}
   shutdown: ${SERVER_SHUTDOWN:immediate}
@@ -24,7 +13,21 @@ server:
     trust-store-type: ${STREAM_ENGINE_TLS_TRUST_STORE_TYPE:PKCS12}
 
 
+rtmp-relay:
+  enabled: ${RTMP_RELAY_ENABLED:false}
+  ffmpeg-path: ${RTMP_RELAY_FFMPEG_PATH:ffmpeg}
+  source-type: ${RTMP_RELAY_SOURCE_TYPE:hls}
+  source-hls-url-template: ${RTMP_RELAY_SOURCE_HLS_URL:http://localhost:5080/LiveApp/streams/{streamId}.m3u8}
+  source-rtmp-url-template: ${RTMP_RELAY_SOURCE_RTMP_URL:rtmp://localhost/LiveApp/{streamId}}
+  start-delay-ms: ${RTMP_RELAY_START_DELAY_MS:3000}
+  source-ready-poll-interval-ms: ${RTMP_RELAY_SOURCE_POLL_MS:2000}
+  source-ready-max-attempts: ${RTMP_RELAY_SOURCE_MAX_ATTEMPTS:30}
+  video-codec: ${RTMP_RELAY_VIDEO_CODEC:copy}
+  audio-codec: ${RTMP_RELAY_AUDIO_CODEC:aac}
+  audio-bitrate: ${RTMP_RELAY_AUDIO_BITRATE:128k}
+
 ams:
+  stub-enabled: ${AMS_STUB_ENABLED:false}
   base-url: ${AMS_BASE_URL:http://localhost:5080/LiveApp/rest/v2}
   start-path: ${AMS_START_PATH:/broadcasts/create}
   stop-path: ${AMS_STOP_PATH:/broadcasts/stop}
@@ -63,3 +66,8 @@ management:
 spring:
   lifecycle:
     timeout-per-shutdown-phase: ${SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE:5s}
+
+analytics:
+  kafka:
+    bootstrap-servers: ${ANALYTICS_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    topic: ${ANALYTICS_KAFKA_TOPIC:stream-lifecycle-events}

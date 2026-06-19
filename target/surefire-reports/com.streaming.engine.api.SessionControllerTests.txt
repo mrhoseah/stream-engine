@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: com.streaming.engine.api.SessionControllerTests
--------------------------------------------------------------------------------
-Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.987 s -- in com.streaming.engine.api.SessionControllerTests

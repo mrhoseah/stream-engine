@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -14,6 +15,7 @@ import java.time.Duration;
 import java.util.Map;
 
 @Service
+@ConditionalOnProperty(prefix = "ams", name = "stub-enabled", havingValue = "false", matchIfMissing = true)
 public class AntMediaServiceImpl implements AntMediaService {
     private static final Logger log = LoggerFactory.getLogger(AntMediaServiceImpl.class);
 

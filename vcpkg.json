@@ -1,7 +1,7 @@
 {
   "name": "stream-engine",
   "version": "1.0.0",
-  "description": "C++ streaming engine using Red5 Pro Core SDK",
+  "description": "Legacy C++ artifacts (stream-engine runtime is Java/Spring Boot + AMS)",
   "dependencies": [
     "cpp-httplib",
     "nlohmann-json"

@@ -1,6 +1,8 @@
 package com.streaming.engine.session;
 
 import com.streaming.engine.ams.AntMediaService;
+import com.streaming.engine.destination.DestinationRelay;
+import com.streaming.engine.destination.StreamDestination;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -12,11 +14,18 @@ public class SessionManager {
     private final AntMediaService antMediaService;
     private final SessionRepository sessions;
     private final StreamMutex streamMutex;
+    private final DestinationRelay destinationRelay;
 
-    public SessionManager(AntMediaService antMediaService, SessionRepository sessions, StreamMutex streamMutex) {
+    public SessionManager(
+            AntMediaService antMediaService,
+            SessionRepository sessions,
+            StreamMutex streamMutex,
+            DestinationRelay destinationRelay
+    ) {
         this.antMediaService = antMediaService;
         this.sessions = sessions;
         this.streamMutex = streamMutex;
+        this.destinationRelay = destinationRelay;
     }
 
     public List<StreamSession> list() {
@@ -30,6 +39,10 @@ public class SessionManager {
     }
 
     public StartResult start(String streamId, String streamKey, String title) {
+        return start(streamId, streamKey, title, List.of());
+    }
+
+    public StartResult start(String streamId, String streamKey, String title, List<StreamDestination> destinations) {
         return streamMutex.executeWithStreamLock(streamId, () -> {
             StreamSession existing = sessions.findByStreamId(streamId).orElse(null);
             if (existing != null && existing.state() == SessionState.RUNNING) {
@@ -37,8 +50,9 @@ public class SessionManager {
             }
             boolean started = antMediaService.startStream(streamId, title);
             if (!started) {
-                return StartResult.RED5_FAILED;
+                return StartResult.AMS_FAILED;
             }
+            destinationRelay.activate(streamId, destinations);
             sessions.save(new StreamSession(streamId, streamKey, title, SessionState.RUNNING, Instant.now()));
             return StartResult.STARTED;
         });
@@ -55,8 +69,9 @@ public class SessionManager {
             }
             boolean stopped = antMediaService.stopStream(streamId);
             if (!stopped) {
-                return StopResult.of(StopStatus.RED5_FAILED);
+                return StopResult.of(StopStatus.AMS_FAILED);
             }
+            destinationRelay.deactivate(streamId);
             sessions.deleteByStreamId(streamId);
             int durationSec = (int) java.time.Duration.between(existing.startedAt(), Instant.now()).getSeconds();
             return StopResult.stopped(existing.streamKey(), Math.max(durationSec, 0));
@@ -66,7 +81,7 @@ public class SessionManager {
     public enum StartResult {
         STARTED,
         ALREADY_RUNNING,
-        RED5_FAILED
+        AMS_FAILED
     }
 
     public record StopResult(StopStatus status, String streamKey, Integer durationSec) {
@@ -83,6 +98,6 @@ public class SessionManager {
         STOPPED,
         NOT_FOUND,
         NOT_RUNNING,
-        RED5_FAILED
+        AMS_FAILED
     }
 }

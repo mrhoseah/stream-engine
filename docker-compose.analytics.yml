@@ -1,0 +1,53 @@
+services:
+  flink-jobmanager:
+    build:
+      context: ../flink-server
+    image: flink-server:1.0
+    container_name: flink-jobmanager
+    command: jobmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=flink-jobmanager
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=stream-lifecycle-events
+      - KAFKA_GROUP_ID=flink-stream-lifecycle
+      - FLINK_WINDOW_MINUTES=1
+      - FLINK_ENV_JAVA_OPTS=--illegal-access=permit --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+    ports:
+      - "8081:8081"
+    depends_on:
+      - kafka
+
+  flink-taskmanager:
+    image: flink-server:1.0
+    command: taskmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=flink-jobmanager
+      - FLINK_ENV_JAVA_OPTS=--illegal-access=permit --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+    depends_on:
+      - flink-jobmanager
+
+  flink-job-submit:
+    image: flink-server:1.0
+    restart: "no"
+    depends_on:
+      - flink-jobmanager
+      - flink-taskmanager
+    entrypoint: >
+      /bin/bash -c "
+      until curl -sf http://flink-jobmanager:8081/overview >/dev/null; do sleep 2; done &&
+      if /opt/flink/bin/flink list -m flink-jobmanager:8081 2>/dev/null | grep -Fq 'Recastly Stream Lifecycle Analytics'; then
+        echo 'Analytics job already running; skipping submit' &&
+        exit 0
+      fi &&
+      /opt/flink/bin/flink run
+      -m flink-jobmanager:8081
+      -d
+      -c com.example.flink.FlinkAnalyticsJob
+      /opt/flink/usrlib/flink-server.jar
+      "
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=stream-lifecycle-events
+      - KAFKA_GROUP_ID=flink-stream-lifecycle
+      - FLINK_WINDOW_MINUTES=1
+      - FLINK_ENV_JAVA_OPTS=--illegal-access=permit --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED

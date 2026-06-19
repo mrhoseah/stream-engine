@@ -1,138 +1,134 @@
-# Integrating stream-engine in recastly
+# Integrating stream-engine with Recastly
 
-Use stream-engine as an enterprise-grade streaming service in the **recastly** sibling project.
+stream-engine is a **Java Spring Boot** service that manages Ant Media Server sessions, optional FFmpeg RTMP simulcast, Kafka lifecycle events, and Recastly webhooks.
 
-## Option A: add_subdirectory (same workspace)
+## Architecture
 
-In recastly's `CMakeLists.txt`:
-
-```cmake
-set(STREAM_ENGINE_SUBPROJECT ON CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../stream-engine ${CMAKE_BINARY_DIR}/stream-engine)
+```
+Recastly (Go)  ←→  stream-engine (Java)  ←→  Ant Media Server
+                         ↓
+                    Kafka (stream-lifecycle-events)
+                         ↓
+                    flink-server (stream lifecycle analytics)
 ```
 
-Then link:
+Recastly enables the integration with `STREAM_ENGINE_ENABLED=true` and proxies session start/stop to stream-engine's REST API. stream-engine validates stream keys against Recastly and posts `stream.started` / `stream.ended` webhooks back. Lifecycle events are also published to Kafka for Flink analytics.
 
-```cmake
-target_link_libraries(recastly_app PRIVATE stream-engine)
-```
-
-`STREAM_ENGINE_SUBPROJECT` skips apps and tests so only the library is built.
-
-## Option B: find_package (installed)
-
-1. Install stream-engine:
-
-   ```powershell
-   cd stream-engine
-   cmake -B build
-   cmake --build build --config Release
-   cmake --install build --prefix install
-   ```
-
-2. In recastly's CMake:
-
-   ```cmake
-   set(stream-engine_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../stream-engine/install/lib/cmake/stream-engine")
-   find_package(stream-engine REQUIRED)
-   target_link_libraries(recastly_app PRIVATE stream-engine::stream-engine)
-   ```
-
-## C++ usage in recastly
-
-```cpp
-#include <stream-engine.hpp>
-
-void run_stream() {
-  stream_engine::StreamingServiceConfig config;
-  config.host = "live.example.com";
-  config.stream_name = "recastly_stream";
-  config.mode = stream_engine::StreamMode::kPublish;
-  config.auth_token = "...";
-
-  auto service = stream_engine::StreamingService::create(config);
-  if (!service) { /* invalid config */ }
-
-  service->set_callbacks({
-    .on_connected = [](const std::string& s) { /* recastly logic */ },
-    .on_error = [](auto code, const std::string& msg) { /* log, retry */ },
-    .on_stream_ready = [](const std::string& s) { /* UI update */ },
-  });
-
-  auto result = service->start();
-  if (!result.ok()) { /* handle */ }
-
-  // ... later
-  service->shutdown();
-}
-```
-
-## stream-engine-server → Recastly webhooks
-## Using stream-engine as Recastly's streaming backend (Recommended)
-
-
-stream-engine now uses a dedicated AntMediaService for all streaming operations. Configure AMS integration in `src/main/resources/application.yml`:
-
-```yaml
-ams:
-  base-url: http://localhost:5080/LiveApp/rest/v2
-  start-path: /broadcasts/create
-  stop-path: /broadcasts/stop
-  # ...other options as needed
-```
-
-No Red5 configuration is required. All stream/session management is handled via AntMediaService and AMS REST API.
-
-To use stream-engine as a proxy for Ant Media Server, configure Recastly to send all stream/session management requests to stream-engine's REST API.
-
-### 1. Set the stream-engine endpoint in Recastly
-
-Set the following environment variable in Recastly:
+## Recastly configuration
 
 | Env var | Description |
 |---------|-------------|
-| `STREAM_ENGINE_BASE_URL` | URL of your stream-engine instance (e.g. `http://localhost:8085`) |
+| `STREAM_ENGINE_ENABLED` | `true` to register stream-engine as the default streaming backend |
+| `STREAM_ENGINE_BASE_URL` | stream-engine base URL (e.g. `http://localhost:8085`) |
+| `STREAM_ENGINE_SHARED_SECRET` | Shared secret for inbound API auth (`X-Stream-Engine-Secret`) |
+| `STREAM_ENGINE_INGEST_HOST` | RTMP ingest host shown to encoders |
+| `STREAM_ENGINE_PLAYBACK_BASE_URL` | HLS/WebRTC playback base URL |
 
-### 2. Example API usage from Recastly
-
-To start a stream:
-
-```
-POST $STREAM_ENGINE_BASE_URL/api/v1/sessions
-Content-Type: application/json
-{
-  "streamId": "my-stream-id",
-  "title": "My Stream Title"
-}
-```
-
-To stop a stream:
-
-```
-POST $STREAM_ENGINE_BASE_URL/api/v1/sessions/my-stream-id/stop
-```
-
-To get stream status:
-
-```
-GET $STREAM_ENGINE_BASE_URL/api/v1/sessions/my-stream-id/status
-```
-
-### 3. Security
-
-stream-engine enforces authentication and signature checks for inbound requests from Recastly. Ensure your secrets and allowed IPs are configured in `application.yml` or via environment variables.
-
-### 4. Why use this architecture?
-
-- Centralizes business logic and security
-- Allows backend changes without affecting Recastly
-- Enables custom features, logging, and analytics
-
-When sessions start or stop, stream-engine-server POSTs to Recastly's webhook so Recastly can update stream status. Set:
+## stream-engine configuration
 
 | Env var | Description |
 |---------|-------------|
+| `RECASTLY_ENABLED` | `true` to validate keys and send webhooks |
 | `RECASTLY_BASE_URL` | Recastly API base (e.g. `http://localhost:8080/api/v1`) |
-| `RECASTLY_STREAM_ENGINE_SECRET` | Must match `stream_engine_shared_secret` in Recastly config |
+| `RECASTLY_SHARED_SECRET` | Must match `STREAM_ENGINE_SHARED_SECRET` in Recastly |
+| `AMS_BASE_URL` | Ant Media REST API base |
+| `AMS_STUB_ENABLED` | `true` for local/CI without a real AMS instance |
 
-If both are set, stream-engine sends `stream.started` on session create and `stream.ended` on session stop. If unset, webhooks are skipped.
+See `docs/rtmp-relay.md` for FFmpeg simulcast settings.
+
+## API contract
+
+### Start session
+
+```
+POST /api/v1/sessions
+X-Stream-Engine-Secret: <shared-secret>
+Content-Type: application/json
+
+{
+  "stream_id": "my-stream-id",
+  "stream_key": "encoder-key",
+  "title": "My Stream",
+  "destinations": [
+    {
+      "platform": "youtube",
+      "rtmp_url": "rtmp://a.rtmp.youtube.com/live2",
+      "stream_key": "youtube-key",
+      "active": true
+    }
+  ]
+}
+```
+
+`streamId` / `streamKey` camelCase aliases are also accepted.
+
+### Stop session
+
+```
+POST /api/v1/sessions/{streamId}/stop
+X-Stream-Engine-Secret: <shared-secret>
+```
+
+### List sessions
+
+```
+GET /api/v1/sessions
+X-Stream-Engine-Secret: <shared-secret>
+```
+
+Returns `SessionSummary` objects with `streamId`, `title`, `state` (`RUNNING`, `STARTING`, `STOPPED`), and `startedAt`. Stream keys are omitted from list responses.
+
+### Session status
+
+```
+GET /api/v1/sessions/{streamId}/status
+X-Stream-Engine-Secret: <shared-secret>
+```
+
+Returns `{ "ok": true, "streamId": "...", "status": "RUNNING" }`.
+
+### Destination health
+
+```
+GET /api/v1/sessions/{streamId}/destinations
+```
+
+See `docs/rtmp-relay.md`.
+
+## Recastly webhook endpoints (stream-engine → Recastly)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/v1/stream-engine/validate-key` | Validate encoder stream keys before AMS start |
+| `POST /api/v1/stream-engine/webhook` | Lifecycle events (`stream.started`, `stream.ended`) |
+
+## Local development
+
+From the Recastly repo:
+
+```bash
+export STREAM_ENGINE_ENABLED=true
+export STREAM_ENGINE_BASE_URL=http://localhost:8085
+export STREAM_ENGINE_SHARED_SECRET=integration-test-secret
+
+# stream-engine (sibling repo)
+export RECASTLY_ENABLED=true
+export RECASTLY_BASE_URL=http://localhost:8080/api/v1
+export RECASTLY_SHARED_SECRET=integration-test-secret
+export AMS_STUB_ENABLED=true
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+CI smoke: `recastly/scripts/ci-stream-engine-integration.sh`
+
+### Analytics stack (Kafka + Flink)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.analytics.yml up --build
+```
+
+Requires the sibling `flink-server` repo at `../flink-server`. Flink UI: http://localhost:8081
+
+## Deprecated: C++ / CMake integration
+
+An earlier design linked a C++ `stream-engine` library via CMake (`add_subdirectory`, `find_package`). The current repository is **Java-only**. Do not use CMake instructions from older docs; use the REST API above.
