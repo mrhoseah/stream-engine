@@ -139,6 +139,14 @@ are retried with bounded backoff; the receiving API must deduplicate by
 `Idempotency-Key`. Durable delivery across process failure still requires a
 shared outbox or queue.
 
+Session start requests may provide an `Idempotency-Key` header. Retries with
+the same key on this engine node return the existing session without creating
+another media session or duplicate `stream.started` webhook. Cross-node start
+deduplication still requires a shared session registry.
+
+When the Red5 SDK compile flag is enabled but its media adapter is not wired,
+the engine fails initialization/start instead of reporting a false live state.
+
 The Red5 SDK is optional at build time. This checkout does not contain the
 proprietary SDK headers, so the SDK-specific media transport still needs to be
 provided by the Red5 SDK adapter in the target deployment; the public engine

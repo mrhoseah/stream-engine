@@ -13,8 +13,9 @@ StreamEngine::~StreamEngine() = default;
 
 bool StreamEngine::initialize(const std::string& /*config_path*/) {
 #ifdef STREAM_ENGINE_HAS_RED5
-  // TODO: Create IClient, connect to Red5 Stream Manager
-  (void)red5_client_;
+  // The SDK adapter must provide the actual client and connection lifecycle.
+  // Do not report readiness while the adapter is still unavailable.
+  return false;
 #endif
   ready_ = true;
   return true;
@@ -28,7 +29,8 @@ bool StreamEngine::initialize(const std::string& /*host*/, std::uint16_t /*port*
 bool StreamEngine::start(const std::string& /*stream_name*/) {
   if (!ready_) return false;
 #ifdef STREAM_ENGINE_HAS_RED5
-  // TODO: Publish or subscribe via IClient
+  // Publishing/subscribing must be implemented by the SDK adapter.
+  return false;
 #endif
   return true;
 }
@@ -39,7 +41,7 @@ bool StreamEngine::start(const std::string& stream_name, StreamMode /*mode*/) {
 
 void StreamEngine::stop() {
 #ifdef STREAM_ENGINE_HAS_RED5
-  // TODO: Disconnect from Red5
+  // Disconnect must be implemented by the SDK adapter.
 #endif
   ready_ = false;
 }

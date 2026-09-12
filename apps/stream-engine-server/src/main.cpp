@@ -44,6 +44,12 @@ std::string get_request_id(const httplib::Request& req) {
   return "";
 }
 
+std::string get_idempotency_key(const httplib::Request& req) {
+  auto it = req.headers.find("Idempotency-Key");
+  if (it != req.headers.end() && !it->second.empty()) return it->second;
+  return get_request_id(req);
+}
+
 // Safe path param access; returns empty if missing
 std::string get_path_param(const httplib::Request& req, const std::string& name) {
   auto it = req.path_params.find(name);
@@ -169,6 +175,7 @@ struct Session {
   std::string stream_id;
   std::string stream_key;
   std::string title;
+  std::string idempotency_key;
   stream_engine::StreamEngine engine;
   bool active{false};
   std::chrono::steady_clock::time_point start_time{};
@@ -182,9 +189,11 @@ class SessionManager {
     bool ok = false;
     std::string error_code;
     std::string error_message;
+    bool already_started = false;
   };
 
-  StartResult start(const json& cfg, const stream_engine::server::ServerConfig& svc_cfg) {
+  StartResult start(const json& cfg, const stream_engine::server::ServerConfig& svc_cfg,
+                    const std::string& idempotency_key) {
     std::string stream_id = cfg.value("stream_id", "");
     std::string stream_key = cfg.value("stream_key", "");
     std::string title = cfg.value("title", "stream");
@@ -212,6 +221,10 @@ class SessionManager {
 
     std::lock_guard<std::mutex> lock(mu_);
     if (sessions_.count(stream_id)) {
+      const auto& existing = sessions_.at(stream_id);
+      if (!idempotency_key.empty() && existing.idempotency_key == idempotency_key) {
+        return {true, "", "", true};
+      }
       return {false, "STREAM_ALREADY_ACTIVE", "stream already active"};
     }
     if (sessions_.size() >= max_sessions_) {
@@ -222,6 +235,7 @@ class SessionManager {
     s.stream_id = stream_id;
     s.stream_key = stream_key.empty() ? stream_id : stream_key;
     s.title = title;
+    s.idempotency_key = idempotency_key;
 
     if (!s.engine.initialize()) {
       sessions_.erase(stream_id);
@@ -293,7 +307,6 @@ class SessionManager {
     for (const auto& [id, s] : sessions_) {
       if (s.active) {
         out.push_back(json{{"stream_id", s.stream_id},
-                           {"stream_key", s.stream_key},
                            {"title", s.title},
                            {"status", "live"}});
       }
@@ -412,13 +425,16 @@ int main(int argc, char* argv[]) {
         return;
       }
       json body = json::parse(req.body);
-      auto r = mgr.start(body, config);
+      auto r = mgr.start(body, config, get_idempotency_key(req));
       if (r.ok) {
-        send_recastly_webhook(config, "stream.started",
-                             body.value("stream_id", ""),
-                             body.value("stream_key", ""), 0);
+        if (!r.already_started) {
+          send_recastly_webhook(config, "stream.started",
+                               body.value("stream_id", ""),
+                               body.value("stream_key", ""), 0);
+        }
         res.status = 200;
-        res.set_content(R"({"ok":true})", "application/json");
+        res.set_content(json{{"ok", true}, {"already_started", r.already_started}}.dump(),
+                        "application/json");
       } else {
         res.status = (r.error_code == "CAPACITY_EXCEEDED") ? 503 : 400;
         res.set_content(

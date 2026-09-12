@@ -84,6 +84,11 @@ event and stream ID. Recastly should persist that key before applying the
 event so retries are harmless. Configure `WEBHOOK_RETRY_ATTEMPTS` and
 `WEBHOOK_RETRY_BACKOFF_MS` on the engine server for bounded retry behavior.
 
+Send an `Idempotency-Key` header when creating a session. A retry with the same
+key is safe on one engine node; distributed deduplication remains a Recastly
+session-registry responsibility. Session listing responses intentionally omit
+the stream key.
+
 Playback discovery is available at `GET /api/v1/sessions/:id/playback` while a
 session is live. The response contains `stream_id` and `playback_url`; the URL
 is empty when `PLAYBACK_BASE_URL` is not configured.
