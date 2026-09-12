@@ -75,5 +75,15 @@ When sessions start or stop, stream-engine-server POSTs to Recastly's webhook so
 |---------|-------------|
 | `RECASTLY_BASE_URL` | Recastly API base (e.g. `http://localhost:8080/api/v1`) |
 | `RECASTLY_STREAM_ENGINE_SECRET` | Must match `stream_engine_shared_secret` in Recastly config |
+| `PLAYBACK_BASE_URL` | Base URL used by playback endpoint discovery |
 
 If both are set, stream-engine sends `stream.started` on session create and `stream.ended` on session stop. If unset, webhooks are skipped.
+
+Webhook requests include `event_id` and an `Idempotency-Key` derived from the
+event and stream ID. Recastly should persist that key before applying the
+event so retries are harmless. Configure `WEBHOOK_RETRY_ATTEMPTS` and
+`WEBHOOK_RETRY_BACKOFF_MS` on the engine server for bounded retry behavior.
+
+Playback discovery is available at `GET /api/v1/sessions/:id/playback` while a
+session is live. The response contains `stream_id` and `playback_url`; the URL
+is empty when `PLAYBACK_BASE_URL` is not configured.

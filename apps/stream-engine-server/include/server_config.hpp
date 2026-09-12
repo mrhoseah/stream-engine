@@ -14,10 +14,14 @@ struct ServerConfig {
   std::string log_level = "info";  // debug | info | warn | error
   bool metrics_enabled = true;
   bool graceful_shutdown = true;
+  bool production_mode = false;
 
   // Recastly webhook integration (optional)
   std::string recastly_base_url;   // e.g. http://localhost:8080/api/v1
   std::string recastly_shared_secret;
+  std::string playback_base_url;   // e.g. https://live.example.com/play
+  int webhook_retry_attempts = 3;
+  int webhook_retry_backoff_ms = 250;
 
   /// Load from environment: PORT, MAX_SESSIONS, LOG_LEVEL, RECASTLY_BASE_URL, etc.
   static ServerConfig from_env();

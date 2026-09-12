@@ -2,6 +2,8 @@
 #include "stream-engine/stream_engine.hpp"
 
 #include <mutex>
+#include <chrono>
+#include <thread>
 
 namespace stream_engine {
 
@@ -21,25 +23,35 @@ class StreamingService::Impl {
     set_status(ServiceStatus::kInitializing);
 
     engine_ = std::make_unique<StreamEngine>();
-    if (!engine_->initialize()) {
-      set_status(ServiceStatus::kError);
-      last_error_ = {ErrorCode::kInternalError, "Failed to initialize engine"};
-      invoke_on_error(last_error_.code, last_error_.message);
-      return last_error_;
+    set_status(ServiceStatus::kReady);
+    set_status(ServiceStatus::kConnecting);
+
+    std::vector<std::string> hosts{config_.host};
+    hosts.insert(hosts.end(), config_.migration_hosts.begin(), config_.migration_hosts.end());
+    bool started = false;
+    for (const auto& host : hosts) {
+      const int attempts = config_.reconnect_attempts + 1;
+      for (int attempt = 0; attempt < attempts && !started; ++attempt) {
+        if (engine_->initialize(host, config_.port, config_.connect_timeout_sec,
+                                config_.auth_token) &&
+            engine_->start(config_.stream_name, config_.mode)) {
+          started = true;
+          invoke_on_connected(host);
+          break;
+        }
+        engine_->stop();
+        if (attempt + 1 < attempts) {
+          std::this_thread::sleep_for(
+              std::chrono::milliseconds(config_.reconnect_backoff_ms));
+        }
+      }
+      if (started) break;
     }
 
-    set_status(ServiceStatus::kReady);
-
-    set_status(ServiceStatus::kConnecting);
-#ifdef STREAM_ENGINE_HAS_RED5
-    // TODO: Connect to Red5 Stream Manager using config_.host, config_.stream_name
-#endif
-    set_status(ServiceStatus::kConnected);
-    invoke_on_connected(config_.stream_name);
-
-    if (!engine_->start(config_.stream_name)) {
+    if (!started) {
       set_status(ServiceStatus::kError);
-      last_error_ = {ErrorCode::kConnectionFailed, "Failed to start stream"};
+      last_error_ = {ErrorCode::kConnectionFailed,
+                     "Failed to connect to any configured streaming host"};
       invoke_on_error(last_error_.code, last_error_.message);
       return last_error_;
     }

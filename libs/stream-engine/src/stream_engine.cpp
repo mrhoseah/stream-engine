@@ -20,12 +20,21 @@ bool StreamEngine::initialize(const std::string& /*config_path*/) {
   return true;
 }
 
+bool StreamEngine::initialize(const std::string& /*host*/, std::uint16_t /*port*/,
+                              std::int32_t /*timeout_sec*/, const std::string& /*auth_token*/) {
+  return initialize();
+}
+
 bool StreamEngine::start(const std::string& /*stream_name*/) {
   if (!ready_) return false;
 #ifdef STREAM_ENGINE_HAS_RED5
   // TODO: Publish or subscribe via IClient
 #endif
   return true;
+}
+
+bool StreamEngine::start(const std::string& stream_name, StreamMode /*mode*/) {
+  return start(stream_name);
 }
 
 void StreamEngine::stop() {

@@ -4,6 +4,7 @@
 
 #include <string>
 #include <cstdint>
+#include <vector>
 
 namespace stream_engine {
 
@@ -22,6 +23,12 @@ struct StreamingServiceConfig {
   std::int32_t connect_timeout_sec = 30;
   /// Optional auth token or credentials.
   std::string auth_token;
+  /// Hosts to try after the primary host becomes unavailable.
+  std::vector<std::string> migration_hosts;
+  /// Number of additional connection attempts per host.
+  std::int32_t reconnect_attempts = 0;
+  /// Delay between connection attempts in milliseconds.
+  std::int32_t reconnect_backoff_ms = 250;
 
   /// Validate configuration. Returns error if invalid.
   Result validate() const;

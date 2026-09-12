@@ -29,6 +29,12 @@ int main() {
   auto bad_service = stream_engine::StreamingService::create(bad_config);
   assert(bad_service == nullptr);
 
+  config.reconnect_attempts = -1;
+  assert(!config.validate().ok());
+  config.reconnect_attempts = 0;
+  config.reconnect_backoff_ms = -1;
+  assert(!config.validate().ok());
+
   std::cout << "StreamingService tests passed.\n";
   return 0;
 }

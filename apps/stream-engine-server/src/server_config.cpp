@@ -23,6 +23,12 @@ std::size_t parse_size(const char* s, std::size_t default_val) {
   return (v > 0) ? static_cast<std::size_t>(v) : default_val;
 }
 
+int parse_int(const char* s, int default_val) {
+  if (!s) return default_val;
+  int v = std::atoi(s);
+  return v >= 0 ? v : default_val;
+}
+
 }  // namespace
 
 ServerConfig ServerConfig::from_env() {
@@ -37,8 +43,14 @@ ServerConfig ServerConfig::from_env() {
   cfg.metrics_enabled = (std::strcmp(getenv_safe("METRICS_ENABLED", "1"), "0") != 0);
   cfg.graceful_shutdown =
       (std::strcmp(getenv_safe("GRACEFUL_SHUTDOWN", "1"), "0") != 0);
+    cfg.production_mode =
+      (std::strcmp(getenv_safe("ENVIRONMENT", "development"), "production") == 0);
   cfg.recastly_base_url = getenv_safe("RECASTLY_BASE_URL", "");
   cfg.recastly_shared_secret = getenv_safe("RECASTLY_STREAM_ENGINE_SECRET", "");
+  cfg.playback_base_url = getenv_safe("PLAYBACK_BASE_URL", "");
+    cfg.webhook_retry_attempts = parse_int(getenv_safe("WEBHOOK_RETRY_ATTEMPTS", "3"), 3);
+    cfg.webhook_retry_backoff_ms =
+      parse_int(getenv_safe("WEBHOOK_RETRY_BACKOFF_MS", "250"), 250);
   return cfg;
 }
 
