@@ -16,22 +16,25 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  service->set_callbacks({
-    .on_connected = [](const std::string& s) {
-      std::cout << "[callback] Connected: " << s << '\n';
-    },
-    .on_error = [](stream_engine::ErrorCode code, const std::string& msg) {
-      std::cerr << "[callback] Error: " << stream_engine::to_string(code) << " - " << msg << '\n';
-    },
-    .on_stream_ready = [](const std::string& s) {
-      std::cout << "[callback] Stream ready: " << s << '\n';
-    },
-    .on_status_changed = [](stream_engine::ServiceStatus from, stream_engine::ServiceStatus to) {
-      std::cout << "[callback] Status: " << stream_engine::to_string(from)
-                << " -> " << stream_engine::to_string(to) << '\n';
-    },
-    .on_shutdown = [] { std::cout << "[callback] Shutdown complete.\n"; },
-  });
+  stream_engine::StreamingServiceCallbacks callbacks;
+  callbacks.on_connected = [](const std::string& s) {
+    std::cout << "[callback] Connected: " << s << '\n';
+  };
+  callbacks.on_error = [](stream_engine::ErrorCode code, const std::string& msg) {
+    std::cerr << "[callback] Error: " << stream_engine::to_string(code) << " - " << msg << '\n';
+  };
+  callbacks.on_stream_ready = [](const std::string& s) {
+    std::cout << "[callback] Stream ready: " << s << '\n';
+  };
+  callbacks.on_stream_stopped = [](const std::string& s) {
+    std::cout << "[callback] Stream stopped: " << s << '\n';
+  };
+  callbacks.on_status_changed = [](stream_engine::ServiceStatus from, stream_engine::ServiceStatus to) {
+    std::cout << "[callback] Status: " << stream_engine::to_string(from)
+              << " -> " << stream_engine::to_string(to) << '\n';
+  };
+  callbacks.on_shutdown = [] { std::cout << "[callback] Shutdown complete.\n"; };
+  service->set_callbacks(callbacks);
 
   auto result = service->start();
   if (!result.ok()) {

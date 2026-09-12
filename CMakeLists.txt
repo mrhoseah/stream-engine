@@ -24,17 +24,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # -DCMAKE_PREFIX_PATH=C:/Users/$USER/Red5Core/<distribution>/cmake
 set(RED5_SDK_OPTIONAL ON CACHE BOOL "Build with Red5 Core SDK when available")
 
-# Compiler flags
-add_compile_options(
-  $<$<CXX_COMPILER_ID:MSVC>:/W4 /utf-8>
-  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
-)
-
-# Debug flags
-add_compile_options(
-  $<$<CONFIG:Debug>:$<$<CXX_COMPILER_ID:MSVC>:/Od>>
-  $<$<CONFIG:Debug>:$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-O0 -g>>
-)
+# Compiler and debug flags
+if(MSVC)
+  add_compile_options(/W4 /utf-8 "$<$<CONFIG:Debug>:/Od>")
+else()
+  add_compile_options(-Wall -Wextra -Wpedantic "$<$<CONFIG:Debug>:-O0;-g>")
+endif()
 
 # Subproject mode for sibling integration (e.g. recastly via add_subdirectory)
 option(STREAM_ENGINE_SUBPROJECT "Build only lib (skip apps/tests) for sibling integration" OFF)
